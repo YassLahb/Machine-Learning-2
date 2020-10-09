@@ -1,0 +1,537 @@
+---
+title: "Assignement2_DS"
+author: "Yassine Lahbabi"
+date: "27/04/2020"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set
+```
+
+```{r global_options, include=FALSE, cache=FALSE}
+library(knitr)
+opts_chunk$set(echo=TRUE, 
+               warning=FALSE, 
+               message=FALSE,
+               cache = FALSE,
+               include = TRUE,
+               results = 'show',
+               error = TRUE)
+```
+
+```{r}
+# To clear everything in the WorkSpace. 
+rm(list = ls())
+```
+
+
+# Assignement 2 : Data Statistics
+
+My answers to Assignment 2 for Data Statistics are found below.
+
+## Question 1: Clustering 
+
+### .a : Exploring the Dataset
+
+In 1.a, we need to explore the dataset and summarise the variables that we have, and include any plots that we need for our study : 
+
+```{r}
+pottery.complete <- read.csv("pottery.csv")
+
+# Looking at the Top 6 values to make sure that the dataset has been read correctly.
+head(pottery.complete)
+# Looking at the different structures of the variables in our dataset.
+str(pottery.complete)
+# Plotting the pottery dataset (Since our variables may not be related we will not compare them between themselves).
+plot(pottery.complete)
+
+```
+
+I then look at the top 6 rows to make sure the dataset has been read in correctly:
+
+
+
+### .b : Adjusting the Dataset 
+
+In 1.b, we need to remove the column 'kiln'.
+
+```{r}
+# Removing the kiln column : 
+pottery = pottery.complete[c(-1)]
+# Checking out if the kiln column has been removed.
+str(pottery)
+
+```
+
+We will now standardize the data because it will make our dataset have the same scale, so our data becomes internally consistent because it will allow us to have the same content and format. 
+
+```{r}
+scale.pottery = scale(pottery)
+
+# Checking out the structure and the values again. 
+head(scale.pottery)
+str(scale.pottery)
+
+```
+
+### .c : Hierarchical Clustering and average linkage.
+
+Now we will try to plot the Sum of square against the number of cluster, so we can find an elbow. 
+
+```{r}
+
+pottery_dist1 <- dist(scale.pottery,method = "euclidean")
+cl.average <- hclust(pottery_dist1,method = "average")
+plot(cl.average)
+
+
+SS <- rep(0,10)
+
+n <- nrow(scale.pottery)
+SS[1] <- (n-1)*sum(apply(scale.pottery,2,var))
+
+set.seed(13)
+for(k in 2:10){
+  SS[k] <- sum(kmeans(scale.pottery,centers =k)$withinss)
+}
+
+plot(SS, main = "SS against number of clusters(k)",pch =19, type ="b")
+
+hierachical.cluster <- cutree(tree = cl.average,k=3)
+hierachical.cluster
+table(hierachical.cluster)
+table(hierachical.cluster,pottery.complete$kiln)
+```
+
+In the last table, when we do a comparison between the real results and the results that we have just found, we can clearly notice that there is 5 groups instead of 3, and the hierarchical algorithm isn't very accurate because it did not manage to cluster the whole group of values.
+
+### .d : K-Means Clustering
+
+Let's move on now to the K-means Clustering : 
+
+```{r}
+library(ggplot2)
+#install.packages("HSAUR2")
+library(HSAUR2)
+
+##########################################
+# We're interested in how 'tightly packed' clusters are - this is the Within Group SS
+# Let's find this for clustering solutions for k=1 up to k=10:
+SS <- rep(0, 10)
+SS
+
+# Finding the k = 1 solution separately, as kmeans() doesn't do this:
+n <- nrow(scale.pottery)
+SS[1] <- (n - 1) * sum(apply(scale.pottery, 2, var))
+
+set.seed(13)
+for(k in 2:10) {
+  SS[k] <- sum(kmeans(scale.pottery, centers = k)$withinss)
+}
+
+# Let's plot k against the SS:
+plot(1:10, SS,
+     type = "b", xlab = "k",
+     ylab = "Within Group Sum of Squares", pch = 19)
+
+# Seems to suggest 3 groups but we know they are 5 different locations
+# Let's try with 3 and 5.
+k <- 3
+kcl1 <- kmeans(scale.pottery, center = k)
+table(kcl1$cluster)
+table(kcl1$cluster, pottery.complete$kiln)
+# Visualising these:
+pairs(scale.pottery, col = kcl1$cluster)
+pairs(scale.pottery, col = pottery$kiln)
+
+
+```
+
+
+At this time, 3 clusters would be an ideal solution for clustering the pottery data using K-means algorithm. 
+
+
+### .e : Comparisons and agreement between the two solutions
+
+Let's now compare between the cluster solutions that we have obtained in 1.c and 1.d using Rand index : 
+
+```{r}
+#install.packages("fossil")
+library(fossil)
+table(kcl1$cluster, pottery.complete$kiln)
+rand.index(kcl1$cluster, as.numeric(pottery.complete$kiln))
+adj.rand.index(kcl1$cluster, as.numeric(pottery.complete$kiln)) # We have 1 so it's perfect !
+
+# Let's check the agreement between both solutions:
+hcl <- cutree(hclust(dist(scale.pottery)), 3)
+pcl <- kmeans(scale.pottery, centers = 3)
+tab <- table(hcl, pcl$cluster)
+tab
+
+
+```
+
+We can see that the values are close so k = 3 seems to be a good solution.
+
+### .f : Conclusion 
+
+The 2 clustering solutions are close. But, in fact, the kmeans clustering seems a little more accurate even if we have approximately the same results. As for the hierarchical clustering we can clearly see that it did not cluster the whole data that we have. For the kmeans we can see that 5 would be a good solution too from the graph as we increase in the value, but i think that we do not have enough data for each category so some values got clustered into another category. This is why we chose 3 as the good solution. 
+
+
+
+## Question 2: Logistic Regression 
+
+
+### Introduction : 
+
+In this study, aim was to predict if a person has a heart disease or not based on attributes blood pressure,heart beat, exang, fbs and others.
+Our Dataset contains many medical indicators that we will explain here : 
+
+ - age : age in year. 
+ 
+ - sex : (1 = male; 0 = female)
+ 
+ - cp : the chest pain experienced(value 1: typical angina, value 2: atypical angina, value 3: non-anginal pain, value 4: asymptomatic)
+ 
+ - trestbps : resting blood pressure (in mm hg on admission to the hospital)
+ 
+ - chol : serum cholestoral in mg/dl
+ 
+ - fbs : (fasting blood sugar > 120 mg/dl) (1 = true; 0 = false)
+ 
+ - restecg: resting electrocardiographic measurement (0 = normal, 1 = having st-t wave abnormality, 2 = showing probable or definite left ventricular hypertrophy by estes’ criteria)
+
+ - thalach: maximum heart rate achieved
+
+ - exang: exercise induced angina (1 = yes; 0 = no)
+
+ - oldpeak: the slope of the peak exercise st segment (value 1: upsloping, value 2: flat, value 3: downsloping)
+ 
+ - slope: the slope of the peak exercise st segment (value 1: upsloping, value 2: flat, value 3: downsloping)
+ 
+ - ca: number of major vessels (0–3) colored by flourosopy
+ 
+ - thal: a blood disorder called thalassemia (3 = normal; 6 = fixed defect; 7 = reversable defect)
+ 
+ - target: heart disease (0 = no, 1 = yes)
+
+
+### Data Exploration : Importing and exploring the Dataset 
+
+```{r}
+rm(list=ls())
+
+
+# Importing the dataset : 
+heart = read.csv("heart-disease.csv",header = F)
+
+# The head of the dataset : 
+head(heart)
+tail(heart)
+# The number of rows of the dataset : 
+nrow(heart)
+
+# Preparing column names : 
+names <- c("age",
+           "sex",
+           "cp",
+           "trestbps",
+           "chol",
+           "fbs",
+           "restecg",
+           "thalach",
+           "exang",
+           "oldpeak",
+           "slope",
+           "ca",
+           "thal",
+           "target")
+
+#Apply column names to the dataframe :
+colnames(heart) <- names
+
+#Glimpse data to verify that new column names are in place :
+colnames(heart)
+
+#Replacing values 1,2,3,4 by 1. So that, 0 is the absence of heart diseace and 1 is the presence of it.
+for(i in 1:length(heart$target)){
+  if(heart$target[i] >= 1){
+    heart$target[i] = 1
+  }
+}
+
+# Exploring now the structure and the values of our modified data : 
+str(heart)
+head(heart)
+tail(heart)
+plot(heart)
+
+```
+
+Let's explore the dataset by using different plots and functions : 
+
+```{r}
+
+# Boxplot of the variables that we suspect to be important : 
+databox=data.frame(heart$age, heart$trestbps,heart$chol,heart$thalach)
+boxplot(databox)
+
+# Scatterplot to compare the resting blood pressure vs serum cholestoral in mg/dl : 
+library(ggplot2)
+gg <- ggplot(heart, aes(x=chol, y=trestbps)) + 
+  geom_point(aes(col=target, size=oldpeak)) + 
+  geom_smooth(method="loess", se=F) + 
+  xlim(c(100, 430)) + 
+  ylim(c(75, 200)) + 
+  labs(subtitle="trestbps Vs chol", 
+       y="trestbps", 
+       x="chol", 
+       title="Scatterplot", 
+       caption = "Source: midwest", 
+       bins = 30)
+plot(gg)
+
+
+```
+
+### Methodology :
+
+
+#### Step 1 : Splitting the Dataset into training and testing set. 
+
+First, we will split our data into a training set and a testing set. 
+```{r}
+
+set.seed(13)
+n <- length(heart$target)
+index <- sample(1:n,floor(n*0.7))
+
+# Splitting the data :
+train <- heart[index,]
+test <- heart[-index,]
+
+```
+
+
+#### Step 2 : Building our linear model 
+
+We will now build our linear model using interactions to have the best model possible. 
+
+```{r}
+
+# Linear model : 
+model.linear <- lm(target ~ .,data = train)
+
+# The ^2 factor allows us to check for all the possible interactions between variables, which results in 163 parameters. 
+model.interaction <- lm(target ~(age+sex+cp+trestbps+chol+fbs+restecg+thalach+exang+oldpeak+slope+ca+thal)^2,data = train)
+
+summary(model.linear)
+
+library(MASS)
+# This function will allow us to have the lowest AIC possible with all the interactions that we've included in our factored model. 
+model.linear.auto <- stepAIC(model.interaction,direction = "both",trace = F)
+
+summary(model.linear.auto)
+
+
+```
+
+
+#### Step 3 : Testing our model.
+
+Now, we will test our model to see if it is efficient enough to predict our target. 
+
+```{r}
+# Removing the target column.
+targetpredict.test <- test[-c(14)]
+# Checking out if it has been removed :
+targetpredict.test
+
+predicted.value <- predict(model.interaction,newdata = test)
+table(round(predicted.value))
+predicted.value
+
+# Readjusting the values so that if they are below 0 then we replace them by 0 and if they are above 1 we replace them by 1. 
+
+for(i in 1:length(predicted.value)){
+  if(predicted.value[i]<0){
+    predicted.value[i] = 0
+  }
+  if(predicted.value[i]>1){
+    predicted.value[i] = 1
+  }
+}
+
+test$pred_target = round(predicted.value)
+table(round(predicted.value),test$target)
+
+```
+
+### Conclusion : 
+
+We can see that our model is working good enough to predict our target. As our model grew up from 54% of R-squared to 80% so our model can expain 80% of our dataset which is a really good value but not sufficient for our purposes given that we are in the domain of health care where false classifications have dire 
+consequences. Evaluating other algorithms would be a logical next step for improving the accuracy and reducing patient risk with the data that we have been given to study. 
+
+
+## Question 3: Principal Components Analysis (PCA).
+
+### Introduction :
+
+We have been given a dataset representing the quality of life in different Cities. The data includes ratings for 9 different indicators of the quality of life in 329 cities. These are climate, housing, health, crime, transportation, education, arts, recreation, and economics. For each category, a higher rating is better.
+We will then try to perform a weighted principal components analysis to be able to interpret the results. 
+
+
+### Data Exploration : 
+```{r}
+rm(list=ls())
+ratings.complete = read.csv(file = "ratings.txt", header = F, sep = ' ')
+
+# Preparing column names : 
+names2 <- c("Climate & Terrain","Housing","HealthCare","Crime","Transportation","Education","Art","Recreation","Economics","Index")
+
+# Apply column names to the dataframe :
+colnames(ratings.complete) <- names2
+
+# Checking out the new names for our columns :
+colnames(ratings.complete)
+
+# Removing the last column because it's only the index : 
+ratings = ratings.complete[-c(10)]
+
+# Checking out the structure and the values of our modified dataset :
+str(ratings)
+head(ratings)
+
+boxplot(ratings,varwidth = T,notch = T ,outline = T, las = 2)
+```
+
+We can notice that there is more variability in the ratings of the arts and housing than in the ratings of crime and climate. 
+
+### Methodology : 
+
+We need now to change the order of some parameters in order to have them all in this following shape : The higher the better the Housing and Crime need to be inverted so that the higher value will be the best. 
+
+```{r}
+ratings$Housing <- -ratings$Housing
+ratings$Crime <- -ratings$Crime
+
+```
+
+We will now scale our data as we did before to remove eventual variations.
+```{r}
+scale.ratings = scale(ratings)
+head(scale.ratings)
+
+```
+
+Now that our variables are set up correctly, we can move on to the PCA.
+
+```{r}
+fit <- prcomp(scale.ratings)
+fit
+s1 <- summary(fit)
+R <- cor(ratings[,])
+# Computing eigenvalues for our numeric matrice R :
+r.eigen <- eigen(R)
+
+fit
+
+
+```
+
+As we can see through the PC1 value, the ratings will be more impacted by the Art parameter, then the Health Care one and finally the Climate & Terrain one.
+We can say that we can have a better community with a higher score if we have cheaper housing but higher Crime rate. 
+
+In PC2, the economics and Recreation parameters influence a lot more the ratings but the Climate & Terrain one has a bigger penalty.
+
+```{r}
+plot(r.eigen$values, xlab = "Eigenvalue Number",
+                     ylab = "Eigenvalue Size",
+                     main = "Scree Graph",type = "b")
+
+pred.ratings = predict(fit)
+
+cumsum(s1$importance[1,]^2) / sum(s1$importance[1,]^2)
+vals <- cumsum(s1$importance[1,]^2) / sum(s1$importance[1,]^2)
+
+plot(c(0, 1:length(vals)), c(0, 100* vals),
+     ylim = c(0, 100),
+     xlab = 'Eigenvalue Number',
+     ylab = 'Variance explained',
+     main = 'Scree Graph', type = "b")
+
+```
+
+We can clearly see from the graph, that the elbow is formed in PC2, and the cumulative proportion of the variance is 51%, which is not good.
+But, the second scree plot show that the only clear break in the amount of variance accounted for by each component is between the first and second components. However, the first component by itself explains less than 40% of the variance, so more components might be needed. We can see that the first three principal components explain roughly two-thirds of the toal variability in the standardized ratings, so that might be a reasonable way to reduce the dimensions. 
+
+
+```{r}
+{plot(pred.ratings[,1],pred.ratings[,2],type ="n",xlab ="PC1",ylab ="PC2",xlim = range(-5,10),ylim=range(-5,10))
+  text(pred.ratings[,1],pred.ratings[,2],
+       labels = ratings.complete$Index,col = ratings.complete$Index)
+  abline(h=0,col = "red")
+  abline(v=0,col ="red")}
+
+```
+
+We can see that there's a huge concentration of points near the origin (0,0) coordinates because we have scaled the data.
+We also have some outliers, let's take a look at them.
+
+```{r}
+points <- data.frame(pred.ratings[,1],pred.ratings[,2])
+colnames(points)[1] <- "x"
+colnames(points)[2] <- "y"
+
+# Assigning a value(0,1,2) based on the number of negative signs in the coordinate. So that we can classify them easily 
+sign <- rep(0,length(points$x))
+sign
+  for(i in 1:length(points$x)){
+    if(points$x[i] > 0 & points$y[i] > 0){
+      sign[i] = 2
+    }
+    else if(points$x[i] < 0 & points$y[i] < 0){
+      sign[i] = 0
+    }
+    else{
+      sign[i] = 1
+    }
+  }
+
+points$sign <- sign
+
+
+# Calculating the distance from the origin (0,0) and the point.
+distance.origin <- sqrt((points$x)^2 + (points$y)^2)
+points$distance.origin <- distance.origin
+
+# Getting the index from the ratings.complete. 
+points$index <- ratings.complete$Index
+points <- points[order(points[,3],points[,4],decreasing = T),]
+```
+
+
+```{r results = "hide"}
+points
+points$rank <- seq(1,length(points$x))
+```
+
+
+```{r results = "hide"}
+ranking <- data.frame(points$rank,points$index)
+ranking
+```
+
+### Conclusion : 
+
+We can conclude from our analysis that from the plot component graph we have some outliers points that appears to be more extreme than the remainder of the data. And from the Scree plot we can see that the first three principal components explain a big amount of our standardized dataset.
+
+
+
